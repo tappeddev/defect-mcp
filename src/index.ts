@@ -38,7 +38,7 @@ async function runSyncCommand(): Promise<void> {
 }
 
 const server = new McpServer(
-  { name: "defect", version: "0.4.0" },
+  { name: "defect", version: "0.4.1" },
   {
     instructions:
       "For defects/tickets the user wants analysed or fixed, call the `get_context` tool first and follow its instructions.",
@@ -66,6 +66,10 @@ function textPrompt(text: string, description?: string) {
 const TICKET_DESCRIPTION =
   "Jira key (PROJ-1234), Jira or GitHub issue URL, owner/repo#123, or #123 with a configured default repo";
 const NOTES_DESCRIPTION = "Optional hints, e.g. environment, app version, suspected area";
+
+function isPlaceholder(value: string | undefined): boolean {
+  return /^\$(\d+|ARGUMENTS)$/.test(value?.trim() ?? "");
+}
 
 /** Validates config and ticket reference without network access, so the prompt can fail fast. */
 async function prepare(ticket: string) {
@@ -167,6 +171,16 @@ server.registerPrompt(
     },
   },
   async ({ ticket, notes }) => {
+    // OpenCode V1 calls prompts/get with the placeholders "$1", "$2" and substitutes the user's arguments into the
+    // returned text afterwards (anomalyco/opencode#33564). Validation then happens in get_context instead.
+    if (isPlaceholder(ticket)) {
+      const notesPart = isPlaceholder(notes) ? ` and notes "${notes}" (omit notes if empty)` : "";
+      return textPrompt(
+        `Triage defect ${ticket}: call the defect MCP tool \`get_context\` with ticket "${ticket}"${notesPart} and follow its instructions.`,
+        "Defect triage",
+      );
+    }
+
     let ref;
     try {
       ref = (await prepare(ticket)).ref;
