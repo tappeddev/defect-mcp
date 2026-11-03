@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { loadConfig } from "./config.js";
+import { loadEnvFiles } from "./env.js";
 import { describeRef, fetchTicket, parseTicketRef, type Ticket } from "./trackers/index.js";
 import { buildFixDefectPrompt } from "./prompts/fixDefect.js";
 import { resolveSources, startBackgroundSync, syncMirror } from "./sources/index.js";
+
+const loadedEnvFiles = loadEnvFiles();
 
 if (process.argv[2] === "sync") {
   await runSyncCommand();
@@ -32,12 +36,23 @@ async function runSyncCommand(): Promise<void> {
 }
 
 const server = new McpServer(
-  { name: "defect", version: "0.1.0" },
+  { name: "defect", version: "0.2.0" },
   {
     instructions:
       "Use the `fix` prompt to triage a defect from a Jira ticket or GitHub issue: locate it (app vs backend), explain and analyse it, propose a fix, and only implement after explicit approval.",
   },
 );
+
+async function workspaceRoots(): Promise<string[]> {
+  if (!server.server.getClientCapabilities()?.roots) return [];
+  try {
+    const { roots } = await server.server.listRoots();
+    return roots.filter((root) => root.uri.startsWith("file://")).map((root) => fileURLToPath(root.uri));
+  } catch (error) {
+    console.error(`[defect-mcp] Could not list workspace roots: ${(error as Error).message}`);
+    return [];
+  }
+}
 
 function textPrompt(text: string, description?: string) {
   return {
@@ -63,7 +78,7 @@ server.registerPrompt(
     // Reloaded on every call so config edits apply without restarting the server.
     let config;
     try {
-      config = loadConfig();
+      config = loadConfig({ roots: await workspaceRoots() });
     } catch (error) {
       return textPrompt(
         `The defect MCP server is misconfigured: ${(error as Error).message}\nTell the user to fix the configuration and do nothing else.`,
@@ -97,12 +112,14 @@ server.registerPrompt(
   },
 );
 
+if (loadedEnvFiles.length) console.error(`[defect-mcp] Loaded environment from ${loadedEnvFiles.join(", ")}`);
 try {
   const config = loadConfig();
   console.error(`[defect-mcp] Loaded ${config.sources.length} source(s) from ${config.configPath}`);
   startBackgroundSync(config);
 } catch (error) {
-  console.error(`[defect-mcp] ${(error as Error).message}`);
+  // Not fatal: clients that start the server outside the project only reveal the workspace via roots later.
+  console.error(`[defect-mcp] ${(error as Error).message} Retrying with the client's workspace roots on the first prompt call.`);
 }
 
 await server.connect(new StdioServerTransport());

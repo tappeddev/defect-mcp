@@ -1,3 +1,4 @@
+import { USER_ENV_FILE } from "../env.js";
 import { MAX_COMMENTS, joinOrDash, truncate, type Ticket, type TicketRef } from "./types.js";
 
 const FIELDS = [
@@ -26,7 +27,7 @@ export async function fetchJiraTicket(ref: JiraRef, configuredUrl?: string): Pro
   const baseUrl = (process.env.JIRA_URL ?? configuredUrl ?? ref.baseUrl)?.replace(/\/+$/, "");
   const token = process.env.JIRA_PERSONAL_TOKEN;
   if (!baseUrl) throw new Error("No Jira URL configured (set JIRA_URL or trackers.jira.url in the config).");
-  if (!token) throw new Error("JIRA_PERSONAL_TOKEN is not set in the MCP server environment.");
+  if (!token) throw new Error(`JIRA_PERSONAL_TOKEN is not set. Add it to ${USER_ENV_FILE} (or the MCP server environment).`);
 
   const response = await fetch(
     `${baseUrl}/rest/api/2/issue/${encodeURIComponent(ref.key)}?fields=${FIELDS}`,

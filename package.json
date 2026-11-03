@@ -1,7 +1,7 @@
 {
   "name": "defect-mcp",
-  "version": "0.1.0",
-  "description": "MCP server providing prompts to triage, analyse and fix defects from Jira tickets",
+  "version": "0.2.0",
+  "description": "MCP server providing prompts to triage, analyse and fix defects from Jira tickets and GitHub issues",
   "type": "module",
   "bin": {
     "defect-mcp": "dist/index.js"
@@ -11,12 +11,13 @@
   ],
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "dev": "tsx src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -26,5 +27,9 @@
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tappeddev/defect-mcp.git"
   }
 }

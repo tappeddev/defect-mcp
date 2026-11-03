@@ -4,3 +4,4 @@ dist/
 defect-mcp.config.json
 .DS_Store
 .idea/
+.defect-mcp.json

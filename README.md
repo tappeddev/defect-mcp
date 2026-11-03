@@ -32,19 +32,33 @@ The server loads the ticket (description, environment, attachments, linked issue
 
 ## Setup
 
-Requires Node.js ≥ 20.
+Requires Node.js ≥ 20.12 and git. Nothing needs to be cloned or built by hand: the tools start the server with `npx`, which installs and builds it from GitHub on first use.
+
+### Once per project (checked in)
+
+1. Add a `.defect-mcp.json` to the project root (see [Configuration](#configuration) and `defect-mcp.config.example.json`).
+2. Add the server to the project configuration of each tool your team uses (see [Use it in your tool](#use-it-in-your-tool)). The entries contain no personal paths, so they can be committed.
+
+### Once per developer
+
+Put your tokens into `~/.config/defect-mcp/.env` (see `.env.example`):
 
 ```sh
-git clone https://github.com/tappeddev/defect-mcp.git && cd defect-mcp
-npm install
-npm run build
-cp .env.example .env                                   # add your tokens
-cp defect-mcp.config.example.json defect-mcp.config.json  # adjust sources
+mkdir -p ~/.config/defect-mcp
+cat > ~/.config/defect-mcp/.env <<'ENV'
+JIRA_PERSONAL_TOKEN=<your token>
+ENV
+```
+
+Optional: pre-fill the mirror cache for `remote` sources you do not have checked out (run in the project root):
+
+```sh
+npx -y github:tappeddev/defect-mcp#v0.2.0 sync
 ```
 
 ### Configuration
 
-`defect-mcp.config.json` (git-ignored, one per developer):
+`.defect-mcp.json` in the project root, committed with the project:
 
 ```json
 {
@@ -63,7 +77,7 @@ cp defect-mcp.config.example.json defect-mcp.config.json  # adjust sources
 }
 ```
 
-The config file is resolved from `--config <path>`, then `DEFECT_MCP_CONFIG`, then `~/.config/defect-mcp/config.json`. It is re-read on every prompt call, so edits apply immediately.
+The config is resolved from `--config <path>`, then `DEFECT_MCP_CONFIG`, otherwise `.defect-mcp.json` is searched from the server's working directory upwards and then in the client's workspace roots. If none is found, the prompt fails with an error explaining how to add one. It is re-read on every prompt call, so edits apply immediately.
 
 ### Sources
 
@@ -94,7 +108,7 @@ Mirrors:
 - Synced in the background when the server starts and refreshed on prompt calls (at most every 5 minutes). A prompt call waits up to `gitlab.syncTimeoutSeconds` (default 60) for a running sync; the first clone of a large repository can take longer, so pre-fill the cache once after setup:
 
   ```sh
-  node --env-file=.env dist/index.js sync --config defect-mcp.config.json
+  npx -y github:tappeddev/defect-mcp#v0.2.0 sync   # in the project root
   ```
 
 - Authentication: if `GITLAB_TOKEN` is set, it is sent only to the host of `gitlab.url` and never written to `.git/config`. Without it, your normal git credentials (keychain, credential helper, SSH key) are used; they must work without an interactive prompt.
@@ -115,39 +129,60 @@ Credentials come from the environment, never from the config:
 | `GITHUB_TOKEN` (or `GH_TOKEN`) | Private GitHub repositories; recommended in general to avoid the low anonymous rate limit. A fine-grained token with read access to *Issues* is enough. |
 | `GITLAB_TOKEN` | Optional: mirroring `remote` sources from GitLab (scope `read_repository`) if your git credentials do not already work. |
 
-The easiest way to provide them is `node --env-file=<path>/.env` as shown below. If a ticket cannot be loaded, the prompt tells the agent to fetch it in another way or to ask you for the details.
+The server loads `~/.config/defect-mcp/.env` (or the file in `DEFECT_MCP_ENV_FILE`) automatically; variables already set in the environment take precedence. If a token is missing or a ticket cannot be loaded, the prompt says so and tells the agent to fetch it in another way or to ask you for the details.
 
 ## Use it in your tool
 
-Replace `/ABS/PATH` with the absolute path of this repository.
+Add these files to the project. Pin the version (`#v0.2.0`) and bump it to roll out updates to the whole team.
 
 ### OpenCode
 
-```sh
-opencode mcp add defect --global -- node --env-file=/ABS/PATH/.env /ABS/PATH/dist/index.js --config /ABS/PATH/defect-mcp.config.json
+`opencode.json`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "defect": {
+        "type": "local",
+        "command": ["npx", "-y", "github:tappeddev/defect-mcp#v0.2.0"],
+        "timeout": { "startup": 180000 }
+      }
+    }
+  }
+}
 ```
+
+The higher startup timeout covers the first start, when `npx` installs and builds the server.
 
 Usage: `/defect:fix PROJ-123` or `/defect:fix owner/repo#123`
 
 ### Claude Code
 
-```sh
-claude mcp add defect --scope user -- node --env-file=/ABS/PATH/.env /ABS/PATH/dist/index.js --config /ABS/PATH/defect-mcp.config.json
+`.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "defect": { "command": "npx", "args": ["-y", "github:tappeddev/defect-mcp#v0.2.0"] }
+  }
+}
 ```
 
 Usage: `/mcp__defect__fix PROJ-123`
 
 ### VS Code (GitHub Copilot, agent mode)
 
-`.vscode/mcp.json` or the user-level MCP configuration:
+`.vscode/mcp.json`:
 
 ```json
 {
   "servers": {
     "defect": {
       "type": "stdio",
-      "command": "node",
-      "args": ["--env-file=/ABS/PATH/.env", "/ABS/PATH/dist/index.js", "--config", "/ABS/PATH/defect-mcp.config.json"]
+      "command": "npx",
+      "args": ["-y", "github:tappeddev/defect-mcp#v0.2.0", "--config", "${workspaceFolder}/.defect-mcp.json"]
     }
   }
 }
@@ -155,16 +190,16 @@ Usage: `/mcp__defect__fix PROJ-123`
 
 Usage: `/mcp.defect.fix`
 
-### Cursor and other MCP clients
+### Cursor
 
-`~/.cursor/mcp.json` (other clients use the same `mcpServers` format):
+`.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "defect": {
-      "command": "node",
-      "args": ["--env-file=/ABS/PATH/.env", "/ABS/PATH/dist/index.js", "--config", "/ABS/PATH/defect-mcp.config.json"]
+      "command": "npx",
+      "args": ["-y", "github:tappeddev/defect-mcp#v0.2.0", "--config", "${workspaceFolder}/.defect-mcp.json"]
     }
   }
 }
@@ -175,9 +210,15 @@ Prompt support differs between clients; check your client's MCP prompt / slash c
 ## Development
 
 ```sh
+git clone https://github.com/tappeddev/defect-mcp.git && cd defect-mcp
+npm install       # also builds dist/ via the prepare script
 npm run dev       # run from source
 npm run inspect   # open the MCP Inspector
 npm run build     # compile to dist/
 ```
+
+To test a local checkout in a project, point the tool at it instead of `npx`, e.g. `["node", "/path/to/defect-mcp/dist/index.js"]`.
+
+Releasing: bump `version` in `package.json` and the server version in `src/index.ts`, commit, tag `vX.Y.Z`, push the tag, then update the pinned version in the projects.
 
 Add a new prompt by creating a builder in `src/prompts/` and registering it in `src/index.ts` with `server.registerPrompt`.

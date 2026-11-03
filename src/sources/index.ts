@@ -3,6 +3,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Config, Source } from "../config.js";
+import { USER_ENV_FILE } from "../env.js";
 import { authFor, git } from "./git.js";
 
 const MIRROR_FRESH_MS = 5 * 60_000;
@@ -66,7 +67,9 @@ async function cloneOrFetch(source: Source, config: Config): Promise<MirrorResul
   } catch (error) {
     // A half-finished first clone would look like a valid mirror next time, so remove it.
     if (fresh) await rm(cachePath, { recursive: true, force: true }).catch(() => undefined);
-    const hint = auth ? "" : " (no GITLAB_TOKEN used: set it, or make sure your git credentials/SSH key work non-interactively)";
+    const hint = auth
+      ? ""
+      : ` (no GITLAB_TOKEN used: add it to ${USER_ENV_FILE}, or make sure your git credentials/SSH key work non-interactively)`;
     return { error: `${(error as Error).message}${hint}` };
   }
 }

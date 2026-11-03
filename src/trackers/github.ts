@@ -1,3 +1,4 @@
+import { USER_ENV_FILE } from "../env.js";
 import { MAX_COMMENTS, MAX_LINKS, joinOrDash, truncate, type Ticket, type TicketRef } from "./types.js";
 
 type Json = any;
@@ -39,7 +40,7 @@ export async function fetchGitHubIssue(ref: GitHubRef, configuredApiUrl?: string
     if (!response.ok) {
       const hint =
         !token && (response.status === 404 || response.status === 401)
-          ? " The repository may be private: set GITHUB_TOKEN in the MCP server environment."
+          ? ` The repository may be private: add GITHUB_TOKEN to ${USER_ENV_FILE}.`
           : "";
       throw new Error(`GitHub responded with HTTP ${response.status} for ${ref.owner}/${ref.repo}#${ref.number}.${hint}`);
     }
