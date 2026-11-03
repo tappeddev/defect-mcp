@@ -59,7 +59,7 @@ function renderTicketUnavailable(ref: TicketRef, reason: string): string {
   ].join("\n");
 }
 
-export function buildFixDefectPrompt(options: {
+export function buildDefectContext(options: {
   config: Config;
   sources: SourceStatus[];
   ref: TicketRef;
@@ -74,64 +74,43 @@ export function buildFixDefectPrompt(options: {
     : renderTicketUnavailable(ref, ticketError ?? "unknown error");
 
   const extraInstructions = config.instructions.length
-    ? ["", "## Team instructions", ...config.instructions.map((i) => `- ${i}`)].join("\n")
+    ? ["", "# Team rules", ...config.instructions.map((i) => `- ${i}`)].join("\n")
     : "";
 
-  const notesSection = notes?.trim() ? `\n## Notes from the developer\n${notes.trim()}\n` : "";
+  const notesSection = notes?.trim() ? `\n# Notes from the developer\n${notes.trim()}\n` : "";
 
-  return `You are helping to find and fix a defect that was reported during testing.
-Respond in English.
+  return `# Task
+Find the cause of a defect reported during testing and propose a fix. Respond in English.
 
-# HARD RULE
-Phases 1 and 2 are **read-only**. Do NOT create, edit, delete or format any file, do NOT run code generators, migrations, git commits, checkouts or any other command that changes state. Reading files, searching code, \`git log\`/\`git show\`/\`git grep\`/\`git blame\`/\`git diff\` and running read-only commands are allowed.
-Only start Phase 3 after the user has explicitly approved the proposed fix in a later message.
+**Read-only until the user approves the fix**: no file edits, formatting, code generation, commits or checkouts. Reading, searching and read-only git commands (\`log\`, \`show\`, \`grep\`, \`blame\`, \`diff\`) are fine.
 
 # Sources
-These are the repositories relevant for this defect. Investigate them directly via their paths, even if they are outside the current working directory. Where a target ref is given, it is the version that was tested — base the analysis on it:
+Investigate these paths directly, even outside the current working directory. If a target ref is given, it is the tested version — analyse that. Roles: app = client, backend = one of our services, library = shared code.
 ${renderSources(sources)}
-
-Roles: \`app\` = client application, \`backend\` = one of our backend services, \`library\` = shared code used by app and/or backend, \`other\` = supporting material.
 
 ${ticketSection}
 ${notesSection}${extraInstructions}
 
-# Workflow
+# How to investigate
+- Trace the feature end to end: UI → state → API call in the app, then endpoint → service → persistence in the backend.
+- Compare request vs. what the backend expects and response vs. what the app parses (paths, fields, nullability, enums, status codes, formats).
+- Use the ticket evidence (errors, logs, versions, environment) and \`git log\` on relevant files.
 
-## Phase 1 — Locate the defect: app or backend?
-1. Summarise the reported behaviour in 2–3 sentences: steps, expected, actual.
-2. Identify the affected feature/screen and trace it end to end: UI → state/logic → API call in the **app**, then the matching endpoint/handler → service → persistence in the **backend**.
-3. Compare the request the app sends with what the backend expects, and the response the backend returns with what the app parses (paths, HTTP methods, payload fields, nullability, enums, status codes, error bodies, date/number formats, localisation).
-4. Use evidence from the ticket (error messages, status codes, logs, screenshots, versions, environment) and from the code (recent \`git log\` on the relevant files can help).
-5. Give a verdict: **App**, **Backend**, **Both**, **Library** or **Unclear** — naming the affected repository/repositories — with a confidence (high/medium/low) and the concrete evidence. If it is unclear, state exactly what information or reproduction would settle it.
+# Answer format
+Keep it short and concrete: findings, not process. No intro, do not restate the ticket, no phase headings, omit empty sections. Aim for at most ~25 lines; the user can ask for details.
 
-## Phase 2 — Explanation, analysis and proposed fix
-Produce a report with exactly these sections:
+**Verdict:** App | Backend | Both | Library | Unclear · <repository> · confidence high/medium/low
+**What happens:** 1–2 sentences a tester understands.
+**Root cause:** 1–3 bullets with \`repo/path/file:line\`; a code excerpt only if essential (max 5 lines).
+**Fix:** bullets per file, plus tests to add; risks only if relevant (e.g. app and backend must be released together). If there are real alternatives, one line each and your recommendation.
+**Open questions:** only if any. If the verdict is Unclear, say exactly what would settle it.
 
-### 1. Verdict
-App / Backend / Both / Library / Unclear — affected repository/repositories — confidence — one-sentence reason.
+End with: "Implement this fix?" and wait.
 
-### 2. Explanation
-What goes wrong, in plain language that a tester or product owner understands.
-
-### 3. Analysis
-- Root cause, with file paths and line numbers (\`repo/path/file:line\`) and short code excerpts.
-- Why it was not caught (missing test, edge case, contract mismatch, …).
-- Impact and other places affected by the same cause.
-
-### 4. Proposed fix
-- The concrete change(s) per repository and file; if there are several options, list them with pros/cons and a recommendation.
-- Tests to add or adjust.
-- Risks, side effects and whether app and backend changes must be released together.
-
-### 5. Open questions
-Anything that needs clarification before implementing.
-
-Then **stop** and ask: "Shall I implement the proposed fix?" Wait for the user's answer.
-
-## Phase 3 — Implementation (only after explicit approval)
-- Implement only in local working copies, never in read-only mirrors. If a working copy is not on the target ref, ask the user which branch to base the fix on before changing anything.
-- Implement exactly the approved fix with minimal, focused changes, following the conventions of each repository (read its AGENTS.md / CLAUDE.md / README / contributing guides if present).
-- Add or update tests and run the relevant tests/linters where possible.
-- Finish with a summary of changed files per repository and how to verify the fix (including steps for the tester).
+# After approval
+- Change only local working copies, never read-only mirrors (ask the user to check the repository out first). If a working copy is not on the target ref, ask which branch to base the fix on.
+- Minimal, focused changes following each repository's conventions (AGENTS.md / CLAUDE.md / README).
+- Add or update tests and run them where possible.
+- Finish with a short list of changed files and how a tester can verify the fix.
 `;
 }

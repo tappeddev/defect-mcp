@@ -23,10 +23,12 @@ Supported ticket references:
 | `owner/repo#123` | GitHub |
 | `#123` or `123` | GitHub, requires `trackers.github.defaultRepo` |
 
-The server loads the ticket (description, environment, attachments, linked issues/PRs, comments) and builds a prompt that makes the agent:
+The prompt only inserts a one-line instruction into the chat. The agent then calls the server's `get_context` tool, which loads the ticket (description, environment, attachments, linked issues/PRs, comments), the state of the configured sources and the triage workflow. Tool results are usually shown collapsed, so the chat stays clean. The agent can also call the tool without the prompt, e.g. when you just write "look at PROJ-123".
+
+The workflow makes the agent:
 
 1. **Locate** the defect: app, backend, both, shared library or unclear, with evidence and confidence.
-2. **Report**: explanation, analysis (root cause with `file:line`), proposed fix incl. tests and risks, open questions.
+2. **Report** briefly: verdict, what happens, root cause with `file:line`, fix incl. tests, open questions.
 3. **Stop** and ask for approval. Phases 1 and 2 are read-only.
 4. **Implement** only after explicit approval.
 
@@ -53,7 +55,7 @@ ENV
 Optional: pre-fill the mirror cache for `remote` sources you do not have checked out (run in the project root):
 
 ```sh
-npx -y github:tappeddev/defect-mcp#v0.2.0 sync
+npx -y github:tappeddev/defect-mcp#v0.3.0 sync
 ```
 
 ### Configuration
@@ -108,7 +110,7 @@ Mirrors:
 - Synced in the background when the server starts and refreshed on prompt calls (at most every 5 minutes). A prompt call waits up to `gitlab.syncTimeoutSeconds` (default 60) for a running sync; the first clone of a large repository can take longer, so pre-fill the cache once after setup:
 
   ```sh
-  npx -y github:tappeddev/defect-mcp#v0.2.0 sync   # in the project root
+  npx -y github:tappeddev/defect-mcp#v0.3.0 sync   # in the project root
   ```
 
 - Authentication: if `GITLAB_TOKEN` is set, it is sent only to the host of `gitlab.url` and never written to `.git/config`. Without it, your normal git credentials (keychain, credential helper, SSH key) are used; they must work without an interactive prompt.
@@ -133,7 +135,7 @@ The server loads `~/.config/defect-mcp/.env` (or the file in `DEFECT_MCP_ENV_FIL
 
 ## Use it in your tool
 
-Add these files to the project. Pin the version (`#v0.2.0`) and bump it to roll out updates to the whole team.
+Add these files to the project. Pin the version (`#v0.3.0`) and bump it to roll out updates to the whole team.
 
 ### OpenCode
 
@@ -146,7 +148,7 @@ Add these files to the project. Pin the version (`#v0.2.0`) and bump it to roll 
     "servers": {
       "defect": {
         "type": "local",
-        "command": ["npx", "-y", "github:tappeddev/defect-mcp#v0.2.0"],
+        "command": ["npx", "-y", "github:tappeddev/defect-mcp#v0.3.0"],
         "timeout": { "startup": 180000 }
       }
     }
@@ -165,7 +167,7 @@ Usage: `/defect:fix PROJ-123` or `/defect:fix owner/repo#123`
 ```json
 {
   "mcpServers": {
-    "defect": { "command": "npx", "args": ["-y", "github:tappeddev/defect-mcp#v0.2.0"] }
+    "defect": { "command": "npx", "args": ["-y", "github:tappeddev/defect-mcp#v0.3.0"] }
   }
 }
 ```
@@ -182,7 +184,7 @@ Usage: `/mcp__defect__fix PROJ-123`
     "defect": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "github:tappeddev/defect-mcp#v0.2.0", "--config", "${workspaceFolder}/.defect-mcp.json"]
+      "args": ["-y", "github:tappeddev/defect-mcp#v0.3.0", "--config", "${workspaceFolder}/.defect-mcp.json"]
     }
   }
 }
@@ -199,7 +201,7 @@ Usage: `/mcp.defect.fix`
   "mcpServers": {
     "defect": {
       "command": "npx",
-      "args": ["-y", "github:tappeddev/defect-mcp#v0.2.0", "--config", "${workspaceFolder}/.defect-mcp.json"]
+      "args": ["-y", "github:tappeddev/defect-mcp#v0.3.0", "--config", "${workspaceFolder}/.defect-mcp.json"]
     }
   }
 }

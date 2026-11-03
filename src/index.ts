@@ -6,7 +6,7 @@ import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { loadEnvFiles } from "./env.js";
 import { describeRef, fetchTicket, parseTicketRef, type Ticket } from "./trackers/index.js";
-import { buildFixDefectPrompt } from "./prompts/fixDefect.js";
+import { buildDefectContext } from "./prompts/fixDefect.js";
 import { resolveSources, startBackgroundSync, syncMirror } from "./sources/index.js";
 
 const loadedEnvFiles = loadEnvFiles();
@@ -36,10 +36,10 @@ async function runSyncCommand(): Promise<void> {
 }
 
 const server = new McpServer(
-  { name: "defect", version: "0.2.0" },
+  { name: "defect", version: "0.3.0" },
   {
     instructions:
-      "Use the `fix` prompt to triage a defect from a Jira ticket or GitHub issue: locate it (app vs backend), explain and analyse it, propose a fix, and only implement after explicit approval.",
+      "For defects/tickets the user wants analysed or fixed, call the `get_context` tool first and follow its instructions.",
   },
 );
 
@@ -61,36 +61,38 @@ function textPrompt(text: string, description?: string) {
   };
 }
 
-server.registerPrompt(
-  "fix",
+const TICKET_DESCRIPTION =
+  "Jira key (PROJ-1234), Jira or GitHub issue URL, owner/repo#123, or #123 with a configured default repo";
+const NOTES_DESCRIPTION = "Optional hints, e.g. environment, app version, suspected area";
+
+/** Validates config and ticket reference without network access, so the prompt can fail fast. */
+async function prepare(ticket: string) {
+  // Reloaded on every call so config edits apply without restarting the server.
+  const config = loadConfig({ roots: await workspaceRoots() });
+  return { config, ref: parseTicketRef(ticket, config) };
+}
+
+server.registerTool(
+  "get_context",
   {
-    title: "Find & fix defect",
+    title: "Defect context",
     description:
-      "Triage a defect from a Jira ticket or GitHub issue: app or backend, explanation, analysis, proposed fix. Code changes only after approval.",
-    argsSchema: {
-      ticket: z
-        .string()
-        .describe("Jira key (PROJ-1234), Jira or GitHub issue URL, owner/repo#123, or #123 with a configured default repo"),
-      notes: z.string().optional().describe("Optional hints, e.g. environment, app version, suspected area"),
+      "Loads a defect ticket (Jira or GitHub), the state of the relevant repositories and the team's triage workflow. " +
+      "Call this first whenever the user asks to analyse or fix a defect/ticket, then follow the returned instructions.",
+    inputSchema: {
+      ticket: z.string().describe(TICKET_DESCRIPTION),
+      notes: z.string().optional().describe(NOTES_DESCRIPTION),
     },
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   async ({ ticket, notes }) => {
-    // Reloaded on every call so config edits apply without restarting the server.
-    let config;
+    let prepared;
     try {
-      config = loadConfig({ roots: await workspaceRoots() });
+      prepared = await prepare(ticket);
     } catch (error) {
-      return textPrompt(
-        `The defect MCP server is misconfigured: ${(error as Error).message}\nTell the user to fix the configuration and do nothing else.`,
-      );
+      return { isError: true, content: [{ type: "text", text: (error as Error).message }] };
     }
-
-    let ref;
-    try {
-      ref = parseTicketRef(ticket, config);
-    } catch (error) {
-      return textPrompt(`${(error as Error).message}\nAsk the user for a valid ticket reference.`);
-    }
+    const { config, ref } = prepared;
 
     let loaded: Ticket | undefined;
     let ticketError: string | undefined;
@@ -105,9 +107,34 @@ server.registerPrompt(
       resolveSources(config),
     ]);
 
+    const text = buildDefectContext({ config, sources, ref, ticket: loaded, ticketError, notes });
+    return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerPrompt(
+  "fix",
+  {
+    title: "Find & fix defect",
+    description: "Triage a defect from a Jira ticket or GitHub issue and propose a fix. Code changes only after approval.",
+    argsSchema: {
+      ticket: z.string().describe(TICKET_DESCRIPTION),
+      notes: z.string().optional().describe(NOTES_DESCRIPTION),
+    },
+  },
+  async ({ ticket, notes }) => {
+    let ref;
+    try {
+      ref = (await prepare(ticket)).ref;
+    } catch (error) {
+      return textPrompt(`defect-mcp: ${(error as Error).message}\nTell the user about this error and do nothing else.`);
+    }
+
+    // Kept to a single line on purpose: the client shows it as the user's message, the details come from the tool.
+    const args = JSON.stringify(notes?.trim() ? { ticket, notes: notes.trim() } : { ticket });
     return textPrompt(
-      buildFixDefectPrompt({ config, sources, ref, ticket: loaded, ticketError, notes }),
-      loaded ? `${loaded.key}: ${loaded.summary}` : `Defect ${describeRef(ref)}`,
+      `Triage defect ${describeRef(ref)}: call the defect MCP tool \`get_context\` with ${args} and follow its instructions.`,
+      `Defect ${describeRef(ref)}`,
     );
   },
 );
