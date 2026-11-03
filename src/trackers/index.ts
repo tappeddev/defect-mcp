@@ -43,8 +43,31 @@ export function parseTicketRef(input: string, config: Config): TicketRef {
   return ref;
 }
 
+/** Strips what tends to stick to a reference when typed or pasted: quotes, brackets, a leading "/", trailing punctuation. */
+function normalize(input: string): string {
+  return input
+    .trim()
+    .replace(/^[\s"'`<(\[]+|[\s"'`>)\],.;:!?]+$/g, "")
+    .replace(/^\/+(?!\/)/, "");
+}
+
 function detectTicketRef(input: string, config: Config): TicketRef | undefined {
-  const trimmed = input.trim();
+  const trimmed = normalize(input);
+  return detectExact(trimmed, config) ?? detectInText(trimmed, config);
+}
+
+/** Free text such as "please look at RTS-123": accepted only if it contains exactly one reference. */
+function detectInText(text: string, config: Config): TicketRef | undefined {
+  const candidates = new Set<string>();
+  for (const match of text.matchAll(/https?:\/\/\S+|[\w.-]+\/[\w.-]+#\d+|[A-Za-z][A-Za-z0-9]+-\d+/g)) {
+    candidates.add(normalize(match[0]));
+  }
+  if (candidates.size !== 1) return undefined;
+  const [candidate] = candidates;
+  return candidate === text ? undefined : detectExact(candidate, config);
+}
+
+function detectExact(trimmed: string, config: Config): TicketRef | undefined {
 
   if (/^https?:\/\//i.test(trimmed)) {
     const url = new URL(trimmed);

@@ -36,7 +36,7 @@ async function runSyncCommand(): Promise<void> {
 }
 
 const server = new McpServer(
-  { name: "defect", version: "0.3.0" },
+  { name: "defect", version: "0.3.1" },
   {
     instructions:
       "For defects/tickets the user wants analysed or fixed, call the `get_context` tool first and follow its instructions.",
@@ -131,7 +131,8 @@ server.registerPrompt(
     }
 
     // Kept to a single line on purpose: the client shows it as the user's message, the details come from the tool.
-    const args = JSON.stringify(notes?.trim() ? { ticket, notes: notes.trim() } : { ticket });
+    const cleanTicket = ref.kind === "jira" ? ref.key : ticket.trim();
+    const args = JSON.stringify(notes?.trim() ? { ticket: cleanTicket, notes: notes.trim() } : { ticket: cleanTicket });
     return textPrompt(
       `Triage defect ${describeRef(ref)}: call the defect MCP tool \`get_context\` with ${args} and follow its instructions.`,
       `Defect ${describeRef(ref)}`,
