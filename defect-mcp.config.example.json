@@ -1,0 +1,47 @@
+{
+  "trackers": {
+    "jira": {
+      "url": "https://jira.example.com"
+    },
+    "github": {
+      "apiUrl": "https://api.github.com",
+      "defaultRepo": "my-org/my-app"
+    }
+  },
+  "gitlab": {
+    "url": "https://gitlab.example.com"
+  },
+  "sources": [
+    {
+      "name": "web-app",
+      "role": "app",
+      "description": "Flutter web app (Riverpod)",
+      "path": "../web-app",
+      "remote": "my-group/frontend/web-app",
+      "ref": "develop"
+    },
+    {
+      "name": "api-server",
+      "role": "backend",
+      "description": "Main API server used by the apps",
+      "path": "../api-server",
+      "remote": "my-group/backend/api-server",
+      "ref": "main"
+    },
+    {
+      "name": "mail-service",
+      "role": "backend",
+      "description": "Service for transactional emails and PDF rendering",
+      "remote": "my-group/backend/mail-service"
+    },
+    {
+      "name": "shared-core",
+      "role": "library",
+      "description": "Shared Flutter packages (API client, models, widgets) used by the apps",
+      "path": "../shared-core"
+    }
+  ],
+  "instructions": [
+    "Never touch generated files (e.g. *.g.dart, *.freezed.dart); change the source and mention which generator must be run."
+  ]
+}
