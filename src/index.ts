@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { downloadAttachment } from "./attachments.js";
 import { loadConfig } from "./config.js";
 import { loadEnvFiles } from "./env.js";
 import { describeRef, fetchTicket, parseTicketRef, type Ticket } from "./trackers/index.js";
@@ -36,7 +38,7 @@ async function runSyncCommand(): Promise<void> {
 }
 
 const server = new McpServer(
-  { name: "defect", version: "0.3.1" },
+  { name: "defect", version: "0.4.0" },
   {
     instructions:
       "For defects/tickets the user wants analysed or fixed, call the `get_context` tool first and follow its instructions.",
@@ -109,6 +111,48 @@ server.registerTool(
 
     const text = buildDefectContext({ config, sources, ref, ticket: loaded, ticketError, notes });
     return { content: [{ type: "text", text }] };
+  },
+);
+
+server.registerTool(
+  "get_attachment",
+  {
+    title: "Download ticket attachment",
+    description:
+      "Downloads an attachment (screenshot, log, PDF, …) of a Jira ticket or GitHub issue using the server's credentials " +
+      "and saves it locally. Use the URLs listed under Attachments in get_context. Text files are returned inline; " +
+      "for images and other files, open the returned path with your file-reading tool.",
+    inputSchema: {
+      url: z.string().url().describe("Attachment URL as listed by get_context"),
+      inline: z
+        .boolean()
+        .optional()
+        .describe("Also return images directly in the result. Only needed if your file tools cannot open images."),
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  async ({ url, inline }) => {
+    try {
+      const config = loadConfig({ roots: await workspaceRoots() });
+      const file = await downloadAttachment(url, config);
+      const summary = `Saved to ${file.path} (${file.mimeType}, ${Math.round(file.bytes / 1024)} KB).`;
+      const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] = [];
+
+      if (file.text !== undefined) {
+        content.push({ type: "text", text: `${summary}\n\n${file.text}` });
+      } else {
+        content.push({
+          type: "text",
+          text: `${summary} Open this path with your file-reading tool to view it${file.isImage ? " (it is an image)" : ""}.`,
+        });
+        if (inline && file.isImage) {
+          content.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: file.mimeType });
+        }
+      }
+      return { content };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text", text: (error as Error).message }] };
+    }
   },
 );
 

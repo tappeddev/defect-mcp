@@ -23,6 +23,10 @@ export interface Ticket {
   attachmentNote?: string;
 }
 
+export const ATTACHMENT_NOTE =
+  "Download the relevant ones with the defect `get_attachment` tool (it has the credentials; never call the tracker API yourself). " +
+  "Screenshots and logs often settle the verdict.";
+
 export const MAX_COMMENTS = 20;
 export const MAX_LINKS = 15;
 const MAX_TEXT_LENGTH = 12_000;

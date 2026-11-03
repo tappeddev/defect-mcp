@@ -1,5 +1,5 @@
 import { USER_ENV_FILE } from "../env.js";
-import { MAX_COMMENTS, MAX_LINKS, joinOrDash, truncate, type Ticket, type TicketRef } from "./types.js";
+import { ATTACHMENT_NOTE, MAX_COMMENTS, MAX_LINKS, joinOrDash, truncate, type Ticket, type TicketRef } from "./types.js";
 
 type Json = any;
 type GitHubRef = Extract<TicketRef, { kind: "github" }>;
@@ -101,7 +101,7 @@ export async function fetchGitHubIssue(ref: GitHubRef, configuredApiUrl?: string
     ],
     description,
     attachments: [...new Map([issue.body, ...comments.map((c) => c.body)].flatMap(extractAttachments).map((a) => [a.url, a])).values()],
-    attachmentNote: "Embedded in the issue/comments; fetch them if your tools allow it, otherwise ask the user.",
+    attachmentNote: ATTACHMENT_NOTE,
     links: allLinks.slice(0, MAX_LINKS),
     omittedLinks: Math.max(0, allLinks.length - MAX_LINKS),
     comments: comments.slice(-MAX_COMMENTS).map((c: Json) => ({

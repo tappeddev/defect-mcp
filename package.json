@@ -1,6 +1,6 @@
 {
   "name": "defect-mcp",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "MCP server providing prompts to triage, analyse and fix defects from Jira tickets and GitHub issues",
   "type": "module",
   "bin": {

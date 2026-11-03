@@ -1,5 +1,5 @@
 import { USER_ENV_FILE } from "../env.js";
-import { MAX_COMMENTS, joinOrDash, truncate, type Ticket, type TicketRef } from "./types.js";
+import { ATTACHMENT_NOTE, MAX_COMMENTS, joinOrDash, truncate, type Ticket, type TicketRef } from "./types.js";
 
 const FIELDS = [
   "summary",
@@ -66,7 +66,7 @@ export async function fetchJiraTicket(ref: JiraRef, configuredUrl?: string): Pro
       url: a.content,
       mimeType: a.mimeType,
     })),
-    attachmentNote: "Requires Jira authentication to download; ask the user for screenshots/logs if they are essential.",
+    attachmentNote: ATTACHMENT_NOTE,
     links: (f.issuelinks ?? []).map((l: Json) => {
       const other = l.outwardIssue ?? l.inwardIssue;
       return {
